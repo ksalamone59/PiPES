@@ -18,9 +18,10 @@
 #include <cmath>
 #include <numbers>
 #include <memory>
-#include <span>
+#include <optional>
 
 #include "pi_p_amplitude.h"
+#include "io.h"
 
 
 // TODO: only works for pi+p currently. Need to adjust for pi-p
@@ -50,7 +51,7 @@ class PartialWaveGen
          * @brief Constructor for partial wave analysis
          * @param momentum_lab_ Lab momentum (in MeV)
          * @param ch Charge of the pion (+1 for pi+, -1 for pi-)
-         * @param phase_shift_file Path to the phase shift file
+         * @param phase_shift_file std::optional path to the phase shift file. Defaults to stored ones in data/ based on lab momentum
          * @param theta_min_ Minimum scattering angle, in LAB frame
          * @param theta_max_ Maximum scattering angle, in LAB frame
          * @param L_MAX Maximum partial wave to calculate. Default: p-wave (L_MAX = 1)
@@ -58,7 +59,7 @@ class PartialWaveGen
          * @param seed_ Seed for the random number generator
          * @param bin_size_ Size of the bins for caching 
          */
-        PartialWaveGen(const double momentum_lab_, const charge ch, const std::string &phase_shift_file, const double theta_min_, const double theta_max_, const int L_MAX_ = 1, bool verbose_ = false, std::mt19937::result_type seed_ = 987654321, double bin_size_ = 0.0001)
+        PartialWaveGen(const double momentum_lab_, const charge ch, const double theta_min_, const double theta_max_, const std::optional<std::string> &phase_shift_file_path = std::nullopt, const int L_MAX_ = 1, bool verbose_ = false, std::mt19937::result_type seed_ = 987654321, double bin_size_ = 0.0001)
             : momentum_lab(momentum_lab_), verbose(verbose_), charge_polarity(ch), L_MAX(L_MAX_), seed(seed_), bin_size(bin_size_)
         {
             if(charge_polarity != charge::plus && charge_polarity != charge::minus)
@@ -66,6 +67,7 @@ class PartialWaveGen
                 throw std::invalid_argument("Invalid charge polarity");
             }
             set_seed(seed_);
+            auto phase_shift_file = phase_shift_file_path.value_or(io::get_phase_shift_file_path(momentum_lab));
             pi_p_amplitude = PiPAmplitude(phase_shift_file, momentum_lab_, charge_polarity, verbose_);
             gamma_boost = pi_p_amplitude.get_gamma_cm_boost();
             alpha_kinematic = pi_p_amplitude.get_alpha_kinematic();

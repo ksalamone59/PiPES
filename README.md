@@ -8,4 +8,5 @@
 On set of 20 iterations sampling 1000000 events, the generator ran at a speed of $902\pm209$ ms, corresponding to an average throughput of $1.11$ million events/s.
 
 ## Overview
-PiPES is a pure C++, no external packages required event generator. 
+PiPES is a pure C++, no external packages required event generator. The phase shift values, and functional forms for the differential cross section, follow closely from the George Washington Groups SAID DB. 
+
