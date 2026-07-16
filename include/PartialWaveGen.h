@@ -178,7 +178,7 @@ class PartialWaveGen
         /**
          * @brief Samples random theta according to SAID DCS
          * @brief \f[ p(\cos(\theta)) \propto \frac{d\sigma}{d\Omega} \f]
-         * @returns Random theta value in the proper frame, in radians 
+         * @returns Random theta value in the CM frame, in radians 
          */
         double sample_theta() noexcept 
         {
@@ -206,21 +206,51 @@ class PartialWaveGen
                     break;
                 }
             }
-            // This theta is in the cm frame, convert to lab if user so requests
-            if(lab_frame)
-            {
-                theta = physics_helpers::theta_cm_to_lab(theta, gamma_boost, alpha_kinematic);
-            }
             return physics_helpers::deg2rad(theta);
         }
         /**
-         * @brief Returns the outgoing momentum in the lab frame. Since this is elastic scattering (assumption), same as incoming
-         * @returns The outgoing momentum in the given frame (in MeV)
+         * @brief Returns the outgoing pion momentum in the proper frame.
+         * @param theta: CM scattering angle, in degrees
+         * @param phi: Azimuthal angle, in degrees
+         * @returns The outgoing pion four-vector in the given frame (in MeV)
          */
-        double outgoing_momentum() const noexcept 
+        fourVector get_pion_four_vector(const double theta, const double phi)
         {
-            if(lab_frame) return momentum_lab;
-            else return momentum_cm;
+            const double k = momentum_cm;
+            const double theta_rad = physics_helpers::deg2rad(theta);
+            const double phi_rad = physics_helpers::deg2rad(phi);
+            const double px = k * std::sin(theta_rad) * std::cos(phi_rad);
+            const double py = k * std::sin(theta_rad) * std::sin(phi_rad);
+            const double pz = k * std::cos(theta_rad);
+            const double E = std::sqrt(k*k + physics_helpers::m_pion_squared);
+            fourVector pion_four_vector(E, px, py, pz);
+            if(lab_frame)
+            {
+                pion_four_vector = physics_helpers::boost_cm_to_lab(pion_four_vector, gamma_boost);
+            }
+            return pion_four_vector;
+        }   
+        /**
+         * @brief Returns the recoil proton 4 vector 
+         * @param theta: CM scattering angle, in degrees
+         * @param phi: Azimuthal angle, in degrees
+         * @returns The recoil proton four-vector in the given frame (in MeV)
+         */
+        fourVector get_proton_four_vector(const double theta, const double phi)
+        {
+            const double k = momentum_cm;
+            const double theta_rad = physics_helpers::deg2rad(theta);
+            const double phi_rad = physics_helpers::deg2rad(phi);
+            const double px = -k * std::sin(theta_rad) * std::cos(phi_rad);
+            const double py = -k * std::sin(theta_rad) * std::sin(phi_rad);
+            const double pz = -k * std::cos(theta_rad);
+            const double E = std::sqrt(k*k + physics_helpers::m_proton_squared);
+            fourVector proton_four_vector(E, px, py, pz);
+            if(lab_frame)
+            {
+                proton_four_vector = physics_helpers::boost_cm_to_lab(proton_four_vector, gamma_boost);
+            }
+            return proton_four_vector;
         }
 };  
 

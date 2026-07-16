@@ -16,6 +16,20 @@
 
 enum class charge{minus = -1, plus = 1};
 
+struct fourVector
+{
+    double E{0.}, px{0.}, py{0.}, pz{0.};
+    fourVector() = default;
+    /**
+     * @brief Constructs a four-vector with the given components
+     */
+    fourVector(double E_, double px_, double py_, double pz_) : E(E_), px(px_), py(py_), pz(pz_) {}
+    double p() const noexcept 
+    {
+        return std::hypot(px, py, pz);
+    }
+};
+
 namespace physics_helpers
 {
     constexpr double m_pion = 139.57; // MeV/c^2
@@ -356,6 +370,22 @@ namespace physics_helpers
             std::cerr << "Error in interpolate: " << e.what() << std::endl;
         }
         return res;
+    }
+    /**
+     * @brief Boosts a given four vector from CM to lab frame 
+     * @param vec: The four vector to boost
+     * @param gamma: The Loretnz factor for the boost
+     * @returns The boosted four vector in the lab frame
+     */
+    fourVector boost_cm_to_lab(const fourVector &vec, const double gamma_)
+    {
+        fourVector boosted_vec;
+        const double beta = std::sqrt(1.0 - 1.0/(gamma_*gamma_));
+        boosted_vec.E = gamma_ * (vec.E + beta * vec.pz);
+        boosted_vec.px = vec.px;
+        boosted_vec.py = vec.py;
+        boosted_vec.pz = gamma_ * (vec.pz + beta * vec.E);
+        return boosted_vec;
     }
 }
 
