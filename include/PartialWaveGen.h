@@ -23,6 +23,17 @@
 #include "pi_p_amplitude.h"
 #include "io.h"
 
+/**
+ * @brief Struct that holds all information for a given elastic scattering event
+ */
+struct elasticEvent
+{
+    double thetaCM{0.}, phiCM{0.}; // Scattering angles in CM frame, in radians
+    double thetaLab{0.}, phiLab{0.}; // Scattering angles in Lab frame, in radians
+    fourVector pionLab, protonLab; // Four vectors in lab frame
+    fourVector pionCM, protonCM; // Four vectors in CM frame
+};
+
 
 // TODO: only works for pi+p currently. Need to adjust for pi-p
 class PartialWaveGen
@@ -43,6 +54,8 @@ class PartialWaveGen
         double umin{0.}, umax{0.};
         double max_cs{0.};
         bool lab_frame{false}; // !lab_frame = cm_frame
+        threeVector beam_direction{0.,0.,1.}; // Default beam direction along z-axis
+        threeVector beta_cm{0.,0.,0.}; // CM frame boost vector
         PiPAmplitude pi_p_amplitude;
     public:
         PartialWaveGen() = default;
@@ -59,35 +72,46 @@ class PartialWaveGen
          * @param seed_ Seed for the random number generator
          * @param bin_size_ Size of the bins for caching 
          */
-        PartialWaveGen(const double momentum_lab_, const charge ch, const double theta_min_, const double theta_max_, const std::optional<std::string> &phase_shift_file_path = std::nullopt, const int L_MAX_ = 1, bool verbose_ = false, std::mt19937::result_type seed_ = 987654321, double bin_size_ = 0.0001)
-            : momentum_lab(momentum_lab_), verbose(verbose_), charge_polarity(ch), L_MAX(L_MAX_), seed(seed_), bin_size(bin_size_)
+        PartialWaveGen(const double momentum_lab_, const charge ch, const double theta_min_, const double theta_max_, const threeVector &beam_direction_, const std::optional<std::string> &phase_shift_file_path = std::nullopt, const int L_MAX_ = 1, bool verbose_ = false, std::mt19937::result_type seed_ = 987654321, double bin_size_ = 0.0001)
+            : momentum_lab(momentum_lab_), verbose(verbose_), charge_polarity(ch), L_MAX(L_MAX_), seed(seed_), bin_size(bin_size_), beam_direction(beam_direction_)
         {
-            if(charge_polarity != charge::plus && charge_polarity != charge::minus)
+            try 
             {
-                throw std::invalid_argument("Invalid charge polarity");
+                if(charge_polarity != charge::plus && charge_polarity != charge::minus)
+                {
+                    throw std::invalid_argument("Invalid charge polarity");
+                }
+                beam_direction = beam_direction.normalize();
+                double beta = momentum_lab / (physics_helpers::pion_lab_energy(momentum_lab) + physics_helpers::m_proton);
+                beta_cm = {beta * beam_direction.x, beta * beam_direction.y, beta * beam_direction.z};
+                set_seed(seed_);
+                auto phase_shift_file = phase_shift_file_path.value_or(io::get_phase_shift_file_path(momentum_lab));
+                pi_p_amplitude = PiPAmplitude(phase_shift_file, momentum_lab_, charge_polarity, verbose_);
+                gamma_boost = pi_p_amplitude.get_gamma_cm_boost();
+                alpha_kinematic = pi_p_amplitude.get_alpha_kinematic();
+                momentum_cm = pi_p_amplitude.get_momentum_cm();
+                theta_min = physics_helpers::theta_lab_to_cm(theta_min_, gamma_boost, alpha_kinematic);
+                theta_max = physics_helpers::theta_lab_to_cm(theta_max_, gamma_boost, alpha_kinematic);
+                umax = std::cos(physics_helpers::deg2rad(theta_min));
+                umin = std::cos(physics_helpers::deg2rad(theta_max));
+                uniform_dist = std::uniform_real_distribution<double>(0.0, 1.0);
+                costheta_dist = std::uniform_real_distribution<double>(umin, umax);
+                int n_bins = static_cast<int>(std::round((umax - umin) / bin_size)) + 1;
+                dsigma_domega_costheta.resize(n_bins);
+                for(int i=0; i<n_bins; i++)
+                {
+                    double cos_theta = umin + i * bin_size;
+                    double theta = physics_helpers::rad2deg(std::acos(cos_theta));
+                    dsigma_domega_costheta[i] = pi_p_amplitude.dsigma_domega_cm(theta);
+                    if(dsigma_domega_costheta[i] > max_cs) max_cs = dsigma_domega_costheta[i];
+                }
+                max_cs *= 1.1;
             }
-            set_seed(seed_);
-            auto phase_shift_file = phase_shift_file_path.value_or(io::get_phase_shift_file_path(momentum_lab));
-            pi_p_amplitude = PiPAmplitude(phase_shift_file, momentum_lab_, charge_polarity, verbose_);
-            gamma_boost = pi_p_amplitude.get_gamma_cm_boost();
-            alpha_kinematic = pi_p_amplitude.get_alpha_kinematic();
-            momentum_cm = pi_p_amplitude.get_momentum_cm();
-            theta_min = physics_helpers::theta_lab_to_cm(theta_min_, gamma_boost, alpha_kinematic);
-            theta_max = physics_helpers::theta_lab_to_cm(theta_max_, gamma_boost, alpha_kinematic);
-            umax = std::cos(physics_helpers::deg2rad(theta_min));
-            umin = std::cos(physics_helpers::deg2rad(theta_max));
-            uniform_dist = std::uniform_real_distribution<double>(0.0, 1.0);
-            costheta_dist = std::uniform_real_distribution<double>(umin, umax);
-            int n_bins = static_cast<int>(std::round((umax - umin) / bin_size)) + 1;
-            dsigma_domega_costheta.resize(n_bins);
-            for(int i=0; i<n_bins; i++)
+            catch(const std::exception &e)
             {
-                double cos_theta = umin + i * bin_size;
-                double theta = physics_helpers::rad2deg(std::acos(cos_theta));
-                dsigma_domega_costheta[i] = pi_p_amplitude.dsigma_domega_cm(theta);
-                if(dsigma_domega_costheta[i] > max_cs) max_cs = dsigma_domega_costheta[i];
+                std::cerr << "Error initializing PartialWaveGen: " << e.what() << std::endl;
+                throw;
             }
-            max_cs *= 1.1;
         }
         /**
          * @brief Sets the seed for mersenne twister
@@ -182,7 +206,6 @@ class PartialWaveGen
          */
         double sample_theta() noexcept 
         {
-            double theta = 0.0;
             while(true)
             {
                 double costheta_sample = costheta_dist(mersenne_twister);
@@ -202,55 +225,60 @@ class PartialWaveGen
                 double dice = uniform_dist(mersenne_twister);
                 if(dice < prob)
                 {
-                    theta = physics_helpers::rad2deg(std::acos(costheta_sample));
-                    break;
+                    return std::acos(costheta_sample);
                 }
             }
-            return physics_helpers::deg2rad(theta);
         }
         /**
          * @brief Returns the outgoing pion momentum in the proper frame.
-         * @param theta: CM scattering angle, in degrees
-         * @param phi: Azimuthal angle, in degrees
+         * @param theta: CM scattering angle, in radians
+         * @param phi: Azimuthal angle, in radians
          * @returns The outgoing pion four-vector in the given frame (in MeV)
          */
         fourVector get_pion_four_vector(const double theta, const double phi)
         {
             const double k = momentum_cm;
-            const double theta_rad = physics_helpers::deg2rad(theta);
-            const double phi_rad = physics_helpers::deg2rad(phi);
-            const double px = k * std::sin(theta_rad) * std::cos(phi_rad);
-            const double py = k * std::sin(theta_rad) * std::sin(phi_rad);
-            const double pz = k * std::cos(theta_rad);
+            const double px = k * std::sin(theta) * std::cos(phi);
+            const double py = k * std::sin(theta) * std::sin(phi);
+            const double pz = k * std::cos(theta);
             const double E = std::sqrt(k*k + physics_helpers::m_pion_squared);
             fourVector pion_four_vector(E, px, py, pz);
-            if(lab_frame)
-            {
-                pion_four_vector = physics_helpers::boost_cm_to_lab(pion_four_vector, gamma_boost);
-            }
             return pion_four_vector;
         }   
         /**
          * @brief Returns the recoil proton 4 vector 
-         * @param theta: CM scattering angle, in degrees
-         * @param phi: Azimuthal angle, in degrees
+         * @param theta: CM scattering angle, in radians
+         * @param phi: Azimuthal angle, in radians
          * @returns The recoil proton four-vector in the given frame (in MeV)
          */
         fourVector get_proton_four_vector(const double theta, const double phi)
         {
             const double k = momentum_cm;
-            const double theta_rad = physics_helpers::deg2rad(theta);
-            const double phi_rad = physics_helpers::deg2rad(phi);
-            const double px = -k * std::sin(theta_rad) * std::cos(phi_rad);
-            const double py = -k * std::sin(theta_rad) * std::sin(phi_rad);
-            const double pz = -k * std::cos(theta_rad);
+            const double px = -k * std::sin(theta) * std::cos(phi);
+            const double py = -k * std::sin(theta) * std::sin(phi);
+            const double pz = -k * std::cos(theta);
             const double E = std::sqrt(k*k + physics_helpers::m_proton_squared);
             fourVector proton_four_vector(E, px, py, pz);
-            if(lab_frame)
-            {
-                proton_four_vector = physics_helpers::boost_cm_to_lab(proton_four_vector, gamma_boost);
-            }
             return proton_four_vector;
+        }
+        /**
+         * @brief Samples a random elastic scattering event according to the SAID DCS
+         * @returns An elasticEvent struct containing the scattering angles and four-vectors of the outgoing pion and proton in the proper frame (in MeV)
+         */
+        elasticEvent sample_event()
+        {
+            elasticEvent event;
+            event.thetaCM = sample_theta();
+            event.phiCM = sample_phi();
+            event.pionCM = get_pion_four_vector(event.thetaCM, event.phiCM);
+            event.protonCM = get_proton_four_vector(event.thetaCM, event.phiCM);
+            event.pionLab = physics_helpers::boost_cm_to_lab(event.pionCM, beta_cm);
+            event.protonLab = physics_helpers::boost_cm_to_lab(event.protonCM, beta_cm);
+            physics_helpers::rotate_four_vector(event.pionLab, beam_direction);
+            physics_helpers::rotate_four_vector(event.protonLab, beam_direction);
+            std::tie(event.thetaLab, event.phiLab) = physics_helpers::spherical_angles_relative_to_axis(
+                {event.pionLab.px, event.pionLab.py, event.pionLab.pz}, beam_direction);
+            return event;
         }
 };  
 

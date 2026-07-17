@@ -16,6 +16,40 @@
 
 enum class charge{minus = -1, plus = 1};
 
+struct threeVector
+{
+    double x{0.}, y{0.}, z{0.};
+    /**
+     * @brief Returns the magnitude squared of the three-vector
+     * @returns The magnitude squared of the three-vector
+     */
+    double mag2() const noexcept
+    {
+        return x*x + y*y + z*z;
+    }
+    /**
+     * @brief Normalizes the three-vector
+     * @returns The normalized three vector
+     */
+    threeVector normalize() const 
+    {
+        double mag = std::sqrt(mag2());
+        if(mag == 0.0)
+        {
+            throw std::runtime_error("Cannot normalize zero vector");
+        }
+        return {x/mag, y/mag, z/mag};
+    }
+    /**
+     * @brief Dot product operator of two three vectors
+     * @returns The dot product of the two three vectors
+     */
+    double operator*(const threeVector &other) const noexcept
+    {
+        return x * other.x + y * other.y + z * other.z;
+    }
+};
+
 struct fourVector
 {
     double E{0.}, px{0.}, py{0.}, pz{0.};
@@ -374,18 +408,82 @@ namespace physics_helpers
     /**
      * @brief Boosts a given four vector from CM to lab frame 
      * @param vec: The four vector to boost
-     * @param gamma: The Loretnz factor for the boost
+     * @param beta: Three vector representing the boost
      * @returns The boosted four vector in the lab frame
      */
-    fourVector boost_cm_to_lab(const fourVector &vec, const double gamma_)
+    fourVector boost_cm_to_lab(const fourVector &vec, const threeVector &beta)
     {
-        fourVector boosted_vec;
-        const double beta = std::sqrt(1.0 - 1.0/(gamma_*gamma_));
-        boosted_vec.E = gamma_ * (vec.E + beta * vec.pz);
-        boosted_vec.px = vec.px;
-        boosted_vec.py = vec.py;
-        boosted_vec.pz = gamma_ * (vec.pz + beta * vec.E);
-        return boosted_vec;
+        double beta2 = beta.mag2();
+        if(beta2 == 0.) return vec;
+        double gamma = 1.0 / std::sqrt(1.0 - beta2);
+        double bp = beta.x * vec.px + beta.y * vec.py + beta.z * vec.pz;
+        double gamma2 = ((gamma - 1.0)/beta2)*bp + gamma*vec.E;
+        return {
+            gamma * (vec.E + bp),
+            vec.px + beta.x * gamma2,
+            vec.py + beta.y * gamma2,
+            vec.pz + beta.z * gamma2
+        };
+    }
+    /**
+     * @brief Rotates a given four vector around a specified axis
+     * @param fVec: The four vector to rotate, passsed as reference
+     * @param axis: The axis to rotate around
+     */
+    void rotate_four_vector(fourVector &fVec, const threeVector &axis)
+    {
+        static const threeVector zAxis{0., 0., 1.};
+        threeVector target = (axis.mag2() == 1) ? axis : axis.normalize();
+        double cos_theta = zAxis * target;
+        if(std::fabs(cos_theta - 1.0) < 1e-6) return;
+        else if(std::fabs(cos_theta + 1.0) < 1.e-6)
+        {
+            fVec.px = -fVec.px;
+            fVec.py = -fVec.py;
+            fVec.pz = -fVec.pz;
+            return;
+        }
+        threeVector rotation_axis = {-target.y, target.x, 0.};
+        rotation_axis = rotation_axis.normalize();
+        double sin_theta = std::sqrt(1.0 - cos_theta * cos_theta);
+        double ux = rotation_axis.x;
+        double uy = rotation_axis.y;    
+        double uz = rotation_axis.z;
+        double px = fVec.px;
+        double py = fVec.py;
+        double pz = fVec.pz;
+        double dot = rotation_axis * threeVector{px, py, pz};
+        fVec.px = px * cos_theta + (uy * pz - uz * py) * sin_theta + ux * dot * (1.0 - cos_theta);
+        fVec.py = py * cos_theta + (uz * px - ux * pz) * sin_theta + uy * dot * (1.0 - cos_theta);
+        fVec.pz = pz * cos_theta + (ux * py - uy * px) * sin_theta + uz * dot * (1.0 - cos_theta);
+    }
+    /**
+     * @brief Returns spherical angles of a vector relative to an arbitrary axis.
+     *
+     * The polar angle theta is measured from axis.
+     * phi=0 is defined by the +x direction projected perpendicular to the axis.
+     * phi increases clockwise when looking along the axis direction.
+     *
+     * @param vec Momentum vector
+     * @param axis Reference axis (beam direction)
+     * @returns pair(theta,phi) in radians
+     */
+    inline std::pair<double,double> spherical_angles_relative_to_axis(const threeVector &vec, const threeVector &axis)
+    {
+        threeVector z = axis.normalize();
+        threeVector x_ref{1.,0.,0.};
+        if(std::fabs(z*x_ref) > 0.999)
+        {
+            x_ref = {0.,1.,0.};
+        }
+        x_ref = {x_ref.x - (x_ref*z)*z.x, x_ref.y - (x_ref*z)*z.y, x_ref.z - (x_ref*z)*z.z};
+        x_ref = x_ref.normalize();
+        threeVector y_ref{z.y*x_ref.z - z.z*x_ref.y, z.z*x_ref.x - z.x*x_ref.z, z.x*x_ref.y - z.y*x_ref.x };
+        threeVector p = vec.normalize();
+        double theta = std::acos(std::clamp(p*z,-1.0,1.0));
+        double phi = std::atan2(p*y_ref, p*x_ref);
+        if(phi < 0) phi += 2.0*std::numbers::pi;
+        return {theta,phi};
     }
 }
 
