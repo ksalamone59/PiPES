@@ -198,5 +198,4 @@ inline partial_wave load_phase_shifts(const std::string &filename, int lmax = 1)
     return pw;
 }
 
-
 #endif 

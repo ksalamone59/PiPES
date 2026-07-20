@@ -348,6 +348,11 @@ namespace physics_helpers
      * @brief Interpolates values in a table, written specificall for tables with row values in q/mu 
      * @param x_extract: The value to interpolate at
      * @param table: The table of values to interpolate from
+     * @tparam N_ROWS: Number of rows in the table
+     * @tparam N_COLS: Number of columns in the table
+     * @note The first column of the table is assumed to be the x values, and the remaining columns are the y values to interpolate
+     * @note The table is assumed to be sorted in ascending order by the first column
+     * @note If x_extract is outside the range of the first column, the function will return the first or last row of the table, respectively
      * @returns The interpolated values
      */
     template<std::size_t N_ROWS, std::size_t N_COLS>

@@ -9,17 +9,34 @@
 namespace io
 {
     /**
-     * @brief Gets the file path for the phase shift data based on lab momentum.
-     * @param lab_momentum The lab momentum.
-     * @return The file path for the phase shift data.
+     * @brief Loads a table of values from a file into a 2D array
+     * @tparam N_ROWS: Number of rows in the table
+     * @tparam N_COLS: Number of columns in the table
+     * @param file_path: Path to the file containing the table
+     * @returns A 2D array containing the loaded table values
      */
-    inline std::filesystem::path get_phase_shift_file_path(const double lab_momentum)
+    template<std::size_t N_ROWS, std::size_t N_COLS>
+    inline std::array<std::array<double, N_COLS>, N_ROWS> load_table(const std::filesystem::path &file_path)
     {
-        #ifndef PHASE_SHIFT_DATADIR
-        throw std::runtime_error("Phase shift data directory not defined! Please check CMake.");
-        #endif 
-        std::filesystem::path file_path = PHASE_SHIFT_DATADIR;
-        return (file_path  / std::format("phase_shifts_{}.dat", lab_momentum));
+        std::array<std::array<double, N_COLS>, N_ROWS> table{};
+        std::ifstream file(file_path);
+        if(!file.is_open())
+        {
+            throw std::runtime_error("Failed to open file: " + file_path.string());
+        }
+        std::string line;
+        std::size_t row_idx{0};
+        while(std::getline(file, line) && row_idx < N_ROWS)
+        {
+            if(line.empty() || line.starts_with("#")) continue;
+            std::istringstream ss(line);
+            for(std::size_t col_idx = 0; col_idx < N_COLS; col_idx++)
+            {
+                ss >> table[row_idx][col_idx];
+            }
+            row_idx++;
+        }
+        return table;
     }
 }
 

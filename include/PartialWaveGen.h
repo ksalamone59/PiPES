@@ -1,7 +1,7 @@
 /**
-   * @brief Partial wave analysis header and functions 
-   * @author Kyle Salamone 
-   * @date July 2026  
+ * @brief Partial wave analysis header and functions
+ * @author Kyle Salamone
+ * @date July 2026
  */
 
 #ifndef PartialWaveGen_H
@@ -18,252 +18,230 @@
 #include <cmath>
 #include <numbers>
 #include <memory>
-#include <optional>
 
 #include "pi_p_amplitude.h"
+#include "momentum_cache.h"
 #include "io.h"
+#include "generatorState.h"
 
 /**
  * @brief Struct that holds all information for a given elastic scattering event
  */
 struct elasticEvent
 {
-    double thetaCM{0.}, phiCM{0.}; // Scattering angles in CM frame, in radians
-    double thetaLab{0.}, phiLab{0.}; // Scattering angles in Lab frame, in radians
-    fourVector pionLab, protonLab; // Four vectors in lab frame
-    fourVector pionCM, protonCM; // Four vectors in CM frame
+    double thetaCM{0.0};
+    double phiCM{0.0};
+
+    double thetaLab{0.0};
+    double phiLab{0.0};
+
+    fourVector pionLab;
+    fourVector protonLab;
+
+    fourVector pionCM;
+    fourVector protonCM;
 };
 
-
-// TODO: only works for pi+p currently. Need to adjust for pi-p
+/**
+ * @brief Partial wave event generator.
+ *
+ * This class only handles:
+ * - random sampling
+ * - beam direction
+ * - frame transformations
+ * - event construction
+ *
+ * All momentum-dependent physics lives in generatorState.
+ */
 class PartialWaveGen
 {
     private:
-        double momentum_lab{0.0}, momentum_cm{0.0};
         bool verbose{false};
-        double gamma_boost{0.0};
-        double alpha_kinematic{0.0};
         charge charge_polarity;
-        double theta_min{0.}, theta_max{0.};
         int L_MAX{1};
+        // Random number generation
         std::mt19937 mersenne_twister;
-        std::uniform_real_distribution<double> uniform_dist, costheta_dist;
-        std::mt19937::result_type seed {987654321};
-        double bin_size{0.0001}; // Step in cos(theta)
-        std::vector<double> dsigma_domega_costheta; // For comparison
-        double umin{0.}, umax{0.};
-        double max_cs{0.};
-        bool lab_frame{false}; // !lab_frame = cm_frame
-        threeVector beam_direction{0.,0.,1.}; // Default beam direction along z-axis
-        threeVector beta_cm{0.,0.,0.}; // CM frame boost vector
-        PiPAmplitude pi_p_amplitude;
+        std::uniform_real_distribution<double> uniform_dist;
+        std::uniform_real_distribution<double> costheta_dist;
+        std::mt19937::result_type seed{987654321};
+        // Lookup resolution
+        double bin_size{0.0001};
+        // Output frame selection
+        bool lab_frame{false};
+        // Beam orientation
+        threeVector beam_direction{0.0,0.0,1.0};
+        /**
+         * @brief Momentum-dependent physics state.
+         *
+         * This will later be replaced/looked up from a momentum cache.
+         */
+        std::shared_ptr<const generatorState> state;
     public:
         PartialWaveGen() = default;
         ~PartialWaveGen() = default;
         /**
-         * @brief Constructor for partial wave analysis
-         * @param momentum_lab_ Lab momentum (in MeV)
-         * @param ch Charge of the pion (+1 for pi+, -1 for pi-)
-         * @param phase_shift_file std::optional path to the phase shift file. Defaults to stored ones in data/ based on lab momentum
-         * @param theta_min_ Minimum scattering angle, in LAB frame
-         * @param theta_max_ Maximum scattering angle, in LAB frame
-         * @param L_MAX Maximum partial wave to calculate. Default: p-wave (L_MAX = 1)
-         * @param verbose_ Whether to print verbose output
-         * @param seed_ Seed for the random number generator
-         * @param bin_size_ Size of the bins for caching 
+         * @brief Construct generator.
+         *
+         * @param momentum_lab_ Beam momentum in MeV
+         * @param ch Pion charge
+         * @param theta_min_ Minimum lab scattering angle
+         * @param theta_max_ Maximum lab scattering angle
+         * @param L_MAX_ Maximum partial wave
          */
-        PartialWaveGen(const double momentum_lab_, const charge ch, const double theta_min_, const double theta_max_, const threeVector &beam_direction_, const std::optional<std::string> &phase_shift_file_path = std::nullopt, const int L_MAX_ = 1, bool verbose_ = false, std::mt19937::result_type seed_ = 987654321, double bin_size_ = 0.0001)
-            : momentum_lab(momentum_lab_), verbose(verbose_), charge_polarity(ch), L_MAX(L_MAX_), seed(seed_), bin_size(bin_size_), beam_direction(beam_direction_)
+        PartialWaveGen(const charge ch, const int L_MAX_=1, bool verbose_= false, std::mt19937::result_type seed_= 987654321) : verbose(verbose_), charge_polarity(ch), L_MAX(L_MAX_), seed(seed_)
         {
-            try 
+            if(charge_polarity != charge::plus && charge_polarity != charge::minus)
             {
-                if(charge_polarity != charge::plus && charge_polarity != charge::minus)
-                {
-                    throw std::invalid_argument("Invalid charge polarity");
-                }
-                beam_direction = beam_direction.normalize();
-                double beta = momentum_lab / (physics_helpers::pion_lab_energy(momentum_lab) + physics_helpers::m_proton);
-                beta_cm = {beta * beam_direction.x, beta * beam_direction.y, beta * beam_direction.z};
-                set_seed(seed_);
-                auto phase_shift_file = phase_shift_file_path.value_or(io::get_phase_shift_file_path(momentum_lab));
-                pi_p_amplitude = PiPAmplitude(phase_shift_file, momentum_lab_, charge_polarity, verbose_);
-                gamma_boost = pi_p_amplitude.get_gamma_cm_boost();
-                alpha_kinematic = pi_p_amplitude.get_alpha_kinematic();
-                momentum_cm = pi_p_amplitude.get_momentum_cm();
-                theta_min = physics_helpers::theta_lab_to_cm(theta_min_, gamma_boost, alpha_kinematic);
-                theta_max = physics_helpers::theta_lab_to_cm(theta_max_, gamma_boost, alpha_kinematic);
-                umax = std::cos(physics_helpers::deg2rad(theta_min));
-                umin = std::cos(physics_helpers::deg2rad(theta_max));
-                uniform_dist = std::uniform_real_distribution<double>(0.0, 1.0);
-                costheta_dist = std::uniform_real_distribution<double>(umin, umax);
-                int n_bins = static_cast<int>(std::round((umax - umin) / bin_size)) + 1;
-                dsigma_domega_costheta.resize(n_bins);
-                for(int i=0; i<n_bins; i++)
-                {
-                    double cos_theta = umin + i * bin_size;
-                    double theta = physics_helpers::rad2deg(std::acos(cos_theta));
-                    dsigma_domega_costheta[i] = pi_p_amplitude.dsigma_domega_cm(theta);
-                    if(dsigma_domega_costheta[i] > max_cs) max_cs = dsigma_domega_costheta[i];
-                }
-                max_cs *= 1.1;
+                throw std::invalid_argument(
+                    "Invalid pion charge");
             }
-            catch(const std::exception &e)
-            {
-                std::cerr << "Error initializing PartialWaveGen: " << e.what() << std::endl;
-                throw;
-            }
+            set_seed(seed_);
+            uniform_dist = std::uniform_real_distribution<double>(0.0, 1.0);
         }
         /**
-         * @brief Sets the seed for mersenne twister
+         * @brief Replace the current state.
+         *
+         * This is the function that will be used
+         * by the momentum cache later.
          */
-        void set_seed(const std::mt19937::result_type seed) noexcept
+        void set_state(const std::shared_ptr<const generatorState>& new_state)
         {
-            this->seed = seed;
-            mersenne_twister.seed(this->seed);
+            state = new_state;
+            costheta_dist = std::uniform_real_distribution<double>(state->get_umin(), state->get_umax());
+            set_beam_direction(beam_direction);
+            this->bin_size = state->get_bin_size();
         }
         /**
-         * @brief Sets output to be lab frame values 
+         * @brief Get current generator state.
          */
-        void set_lab_frame() 
+        const generatorState &get_state() const noexcept
         {
-            this->lab_frame = true;
+            return *state;
         }
         /**
-         * @brief Sets output to be CM frame values 
+         * @brief Returns PiPAmplitude.
+         */
+        const PiPAmplitude &get_pi_p_amplitude() const noexcept
+        {
+            return state->get_amplitude();
+        }
+
+        /**
+         * @brief Set RNG seed.
+         */
+        void set_seed(const std::mt19937::result_type seed_)noexcept
+        {
+            seed = seed_;
+            mersenne_twister.seed(seed);
+        }
+        /**
+         * @brief Set output in lab frame.
+         */
+        void set_lab_frame()
+        {
+            lab_frame = true;
+        }
+        /**
+         * @brief Set output in CM frame.
          */
         void set_cm_frame()
         {
-            this->lab_frame = false;
+            lab_frame = false;
         }
         /**
-         * @brief Returns whether generator is in lab frame or CM frame
-         * @returns True if in lab frame, false if in CM frame
+         * @brief Check output frame.
          */
         bool is_in_lab_frame() const noexcept
         {
             return lab_frame;
         }
         /**
-         * @brief Gets minimum theta in correct frame 
-         * @returns Minimum theta in the correct frame, in degrees
+         * @brief Minimum angle in current frame.
          */
         double get_min_theta() const noexcept
         {
-            if(lab_frame)
-            {
-                return physics_helpers::theta_cm_to_lab(theta_min, gamma_boost, alpha_kinematic);
-            }
-            return theta_min;
+            return lab_frame ? state->get_theta_lab_min() : state->get_theta_cm_min();
         }
         /**
-         * @brief Gets maximum theta in correct frame 
-         * @returns Maximum theta in the correct frame, in degrees
+         * @brief Maximum angle in current frame.
          */
         double get_max_theta() const noexcept
         {
-            if(lab_frame)
-            {
-                return physics_helpers::theta_cm_to_lab(theta_max, gamma_boost, alpha_kinematic);
-            }
-            return theta_max;
+            return lab_frame ? state->get_theta_lab_max() : state->get_theta_cm_max();
         }
         /**
-         * @brief Returns CM frame minimum theta, in degrees, always
-         * @returns CM frame minimum theta, in degrees
+         * @brief Minimum CM angle.
          */
         double get_min_theta_cm() const noexcept
         {
-            return theta_min;
+            return state->get_theta_cm_min();
         }
         /**
-         * @brief Returns CM frame maximum theta, in degrees, always
-         * @returns CM frame maximum theta, in degrees
+         * @brief Maximum CM angle.
          */
         double get_max_theta_cm() const noexcept
         {
-            return theta_max;
+            return state->get_theta_cm_max();
         }
         /**
-         * @brief Returns reference to object to calculate PiPAmplitude object
-         * @returns Reference to PiPAmplitude object
-         */
-        const PiPAmplitude& get_pi_p_amplitude() const noexcept
-        {
-            return pi_p_amplitude;
-        }
-        /**
-         * @brief Samples random uniform phi in accordance with theory
-         * @returns Random phi value, in radians 
+         * @brief Sample uniform azimuthal angle.
          */
         double sample_phi() noexcept
         {
             return 2.0 * std::numbers::pi * uniform_dist(mersenne_twister);
         }
         /**
-         * @brief Samples random theta according to SAID DCS
-         * @brief \f[ p(\cos(\theta)) \propto \frac{d\sigma}{d\Omega} \f]
-         * @returns Random theta value in the CM frame, in radians 
+         * @brief Samples theta according to differential cross section.
+         *
+         * Uses rejection sampling from the cached lookup table.
          */
-        double sample_theta() noexcept 
+        double sample_theta() noexcept
         {
+            const auto& lookup = state->get_dsigma_domega_costheta();
+            const double umin = state->get_umin();
             while(true)
             {
                 double costheta_sample = costheta_dist(mersenne_twister);
                 double offset = (costheta_sample - umin) / bin_size;
                 std::size_t idx_lo = static_cast<std::size_t>(std::floor(offset + 1e-9));
                 std::size_t idx_hi = idx_lo + 1;
-                if(idx_hi >= dsigma_domega_costheta.size())
-                {
-                    idx_hi = dsigma_domega_costheta.size() - 1;
-                }
+                if(idx_hi >= lookup.size()) idx_hi = lookup.size()-1;
                 double costheta_lo = umin + idx_lo * bin_size;
                 double frac = (costheta_sample - costheta_lo) / bin_size;
-                double cs_lo = dsigma_domega_costheta[idx_lo];
-                double cs_hi = dsigma_domega_costheta[idx_hi];
-                double dsigma = cs_lo + frac * (cs_hi - cs_lo);
-                double prob = std::fmin(1.0, dsigma / max_cs);
-                double dice = uniform_dist(mersenne_twister);
-                if(dice < prob)
+                double cs = lookup[idx_lo] + frac * (lookup[idx_hi]-lookup[idx_lo]);
+                double probability = std::min(1.0, cs / state->get_max_cs());
+                if(uniform_dist(mersenne_twister) < probability)
                 {
                     return std::acos(costheta_sample);
                 }
             }
         }
         /**
-         * @brief Returns the outgoing pion momentum in the proper frame.
-         * @param theta: CM scattering angle, in radians
-         * @param phi: Azimuthal angle, in radians
-         * @returns The outgoing pion four-vector in the given frame (in MeV)
+         * @brief Construct pion CM four-vector.
          */
-        fourVector get_pion_four_vector(const double theta, const double phi)
+        fourVector get_pion_four_vector(const double theta, const double phi) const
         {
-            const double k = momentum_cm;
+            const double k = state->get_momentum_cm();
             const double px = k * std::sin(theta) * std::cos(phi);
             const double py = k * std::sin(theta) * std::sin(phi);
             const double pz = k * std::cos(theta);
             const double E = std::sqrt(k*k + physics_helpers::m_pion_squared);
-            fourVector pion_four_vector(E, px, py, pz);
-            return pion_four_vector;
-        }   
+            return fourVector(E,px,py,pz);
+        }
         /**
-         * @brief Returns the recoil proton 4 vector 
-         * @param theta: CM scattering angle, in radians
-         * @param phi: Azimuthal angle, in radians
-         * @returns The recoil proton four-vector in the given frame (in MeV)
+         * @brief Construct recoil proton CM four-vector.
          */
-        fourVector get_proton_four_vector(const double theta, const double phi)
+        fourVector get_proton_four_vector(const double theta, const double phi) const
         {
-            const double k = momentum_cm;
+            const double k = state->get_momentum_cm();
             const double px = -k * std::sin(theta) * std::cos(phi);
             const double py = -k * std::sin(theta) * std::sin(phi);
             const double pz = -k * std::cos(theta);
-            const double E = std::sqrt(k*k + physics_helpers::m_proton_squared);
-            fourVector proton_four_vector(E, px, py, pz);
-            return proton_four_vector;
+            const double E = std::sqrt(k*k +physics_helpers::m_proton_squared);
+            return fourVector(E,px,py,pz);
         }
         /**
-         * @brief Samples a random elastic scattering event according to the SAID DCS
-         * @returns An elasticEvent struct containing the scattering angles and four-vectors of the outgoing pion and proton in the proper frame (in MeV)
+         * @brief Generate complete elastic scattering event.
          */
         elasticEvent sample_event()
         {
@@ -272,14 +250,22 @@ class PartialWaveGen
             event.phiCM = sample_phi();
             event.pionCM = get_pion_four_vector(event.thetaCM, event.phiCM);
             event.protonCM = get_proton_four_vector(event.thetaCM, event.phiCM);
-            event.pionLab = physics_helpers::boost_cm_to_lab(event.pionCM, beta_cm);
-            event.protonLab = physics_helpers::boost_cm_to_lab(event.protonCM, beta_cm);
+            threeVector beta_cm_vector = {0., 0., state->get_beta_boost()};
+            event.pionLab = physics_helpers::boost_cm_to_lab(event.pionCM, beta_cm_vector);
+            event.protonLab = physics_helpers::boost_cm_to_lab(event.protonCM, beta_cm_vector);
             physics_helpers::rotate_four_vector(event.pionLab, beam_direction);
             physics_helpers::rotate_four_vector(event.protonLab, beam_direction);
-            std::tie(event.thetaLab, event.phiLab) = physics_helpers::spherical_angles_relative_to_axis(
-                {event.pionLab.px, event.pionLab.py, event.pionLab.pz}, beam_direction);
+            std::tie(event.thetaLab,event.phiLab) = physics_helpers::spherical_angles_relative_to_axis(
+                                    {event.pionLab.px,event.pionLab.py,event.pionLab.pz},beam_direction);
             return event;
         }
-};  
+        /**
+         * @brief Change incoming beam direction.
+         */
+        void set_beam_direction(const threeVector& direction)
+        {
+            beam_direction = direction.normalize();
+        }
+};
 
-#endif 
+#endif

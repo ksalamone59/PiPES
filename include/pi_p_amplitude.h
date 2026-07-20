@@ -3,10 +3,12 @@
 
 #include "physics_helpers.h"
 #include "partial_wave.h"
+#include "PhaseShiftLoader.h"
 
 #include <array>
 #include <complex>
 #include <limits>
+#include <memory>
 
 using cdouble = std::complex<double>;
 inline static constexpr cdouble I(0.0, 1.0);
@@ -31,6 +33,7 @@ class PiPAmplitude
     private:
         partial_wave phase_shifts;
         std::array<double,3> coulomb_phases{0.,0.,0.};
+        std::shared_ptr<const PhaseShiftLoader> phase_shift_loader;
         double gamma_coulomb{0.}, cm_momentum{0.}, cm_momentum_fm{0.};
         double q_over_mu{0.}, alpha_kinematic{0.0};
         double momentum_lab{0.}; // MeV 
@@ -49,7 +52,7 @@ class PiPAmplitude
          * @param theta_cm Center of mass scattering angle, in degrees
          * @returns The Coulomb amplitude
          */
-        inline cdouble coulomb_no_spin_flip_amplitude(const double theta_cm)
+        inline cdouble coulomb_no_spin_flip_amplitude(const double theta_cm) 
         {
             // Tromborg
             const double theta_cm_rad = physics_helpers::deg2rad(theta_cm);
@@ -106,7 +109,7 @@ class PiPAmplitude
          * @param theta_cm Center of mass scattering angle, in degrees 
          * @returns The Coulomb phase shift, in radians
          */
-        inline double phiC(const double theta_cm)
+        inline double phiC(const double theta_cm) 
         {
             const double theta_cm_rad = physics_helpers::deg2rad(theta_cm);
             const double s2 = std::pow(std::sin(theta_cm_rad / 2.0), 2.0);
@@ -118,7 +121,7 @@ class PiPAmplitude
          * @param plus_minus A boolean indicating which state we are in (+1/2 or -1/2)
          * @returns The cached Coulomb phase shift
          */
-        inline double get_coulomb_phase(const int l, const bool plus_minus)
+        inline double get_coulomb_phase(const int l, const bool plus_minus) const
         {
             if(l == 0) return coulomb_phases[0];
             return plus_minus ? coulomb_phases[2] : coulomb_phases[1];
@@ -135,36 +138,21 @@ class PiPAmplitude
             return ((S - 1.0) / (2.0 * I * cm_momentum_fm)); 
         }
     public: 
-        PiPAmplitude() = default;
+        PiPAmplitude() = delete;
         ~PiPAmplitude() = default;
         /**
          * @brief Constructor for the pion-proton amplitude class
-         * @param phase_shift_file Path to the phase shift file
+         * @param phase_shift_loader_ A shared pointer to a PhaseShiftLoader object
          * @param momentum_lab_ Lab momentum
          * @param ch Charge of the pion
          * @param verbose_ Whether to print verbose output
          * @param L_MAX_ Maximum partial wave to calculate. Default: p-wave (L_MAX = 1)
          */
-        PiPAmplitude(const std::string &phase_shift_file, const double momentum_lab_, const charge ch, bool verbose_ = false, const int L_MAX_ = 1) 
-            : momentum_lab(momentum_lab_), charge_polarity(ch), verbose(verbose_), L_MAX(L_MAX_)
+        PiPAmplitude(const std::shared_ptr<const PhaseShiftLoader> &phase_shift_loader_, const double momentum_lab_, const charge ch, bool verbose_ = false, const int L_MAX_ = 1) 
+            : phase_shift_loader(std::move(phase_shift_loader_)), momentum_lab(momentum_lab_), charge_polarity(ch), verbose(verbose_), L_MAX(L_MAX_)
         {
-            phase_shifts = load_phase_shifts(phase_shift_file, L_MAX);
-            energy_lab = physics_helpers::pion_lab_energy(momentum_lab);
-            s = physics_helpers::s(energy_lab);
-            W = std::sqrt(s);
-            cm_momentum = physics_helpers::p_lab_to_cm(s);
-            q_over_mu = cm_momentum / physics_helpers::m_pion;
-            coulomb_phases = physics_helpers::interpolate(q_over_mu, coulomb_phase_shifts);
-            cm_momentum_fm = cm_momentum / physics_helpers::hbarc;
-            energy_cm_proton = physics_helpers::E_cm_p(cm_momentum);
-            energy_cm = physics_helpers::E_cm_pi(cm_momentum);
-            beta_cm_proton = physics_helpers::beta_proton_cm(cm_momentum);
-            beta_cm_pion = physics_helpers::beta_pion_cm(cm_momentum);
-            beta_lab_cm_boost = physics_helpers::beta_boost(momentum_lab, energy_lab);
-            alpha_kinematic = physics_helpers::alpha_kin(beta_lab_cm_boost, beta_cm_pion);
-            gamma_relativsitc = physics_helpers::gamma(beta_lab_cm_boost);
-            gamma_coulomb = physics_helpers::alpha_em * (s - physics_helpers::m_proton_squared - physics_helpers::m_pion_squared) / (2.0 * cm_momentum * W);
             int charge_sign = static_cast<int>(charge_polarity);
+            update_parameters_for_new_momentum(momentum_lab);
             if(verbose)
             {
                 std::cout << "Partial Wave Analyis initialized with the following kinematic parameters:" << std::endl;
@@ -257,6 +245,31 @@ class PiPAmplitude
             double dcs = std::norm(spin_no_flip_amplitude + spin_no_flip_coulomb_amplitude) + std::norm(spin_flip_amplitude + spin_flip_coulomb_amplitude);
             return dcs;
         }
+        /**
+         * @brief: Update PWA parameters for a given lab momentum 
+         * @param momentum_lab The lab momentum in MeV
+         */
+        void update_parameters_for_new_momentum(const double momentum_lab)
+        {
+            this->momentum_lab = momentum_lab;
+            phase_shifts = phase_shift_loader->set_s_p_phase_shifts(momentum_lab, verbose);
+            energy_lab = physics_helpers::pion_lab_energy(momentum_lab);
+            s = physics_helpers::s(energy_lab);
+            cm_momentum = physics_helpers::p_lab_to_cm(s);
+            W = std::sqrt(s);
+            q_over_mu = cm_momentum / physics_helpers::m_pion;
+            coulomb_phases = physics_helpers::interpolate(q_over_mu, coulomb_phase_shifts);
+            cm_momentum_fm = cm_momentum / physics_helpers::hbarc;
+            energy_cm_proton = physics_helpers::E_cm_p(cm_momentum);
+            energy_cm = physics_helpers::E_cm_pi(cm_momentum);
+            beta_cm_proton = physics_helpers::beta_proton_cm(cm_momentum);
+            beta_cm_pion = physics_helpers::beta_pion_cm(cm_momentum);
+            beta_lab_cm_boost = physics_helpers::beta_boost(momentum_lab, energy_lab);
+            alpha_kinematic = physics_helpers::alpha_kin(beta_lab_cm_boost, beta_cm_pion);
+            gamma_relativsitc = physics_helpers::gamma(beta_lab_cm_boost);
+            gamma_coulomb = physics_helpers::alpha_em * (s - physics_helpers::m_proton_squared - physics_helpers::m_pion_squared) / (2.0 * cm_momentum * W);
+        }
+        inline const partial_wave &get_phase_shifts() const {return phase_shifts;}
 };
 
 #endif 
