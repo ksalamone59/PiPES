@@ -80,7 +80,7 @@ namespace physics_helpers
     inline constexpr double rad2deg(double x) {return x * 180. / std::numbers::pi;}
     /**
      * @brief Converts lab frame momentum to CM frame momentum
-     * @param s: Mandelstam s variable
+     * @param s Mandelstam s variable
      * @returns The CM frame momentum
      */
     inline double p_lab_to_cm(const double s)
@@ -89,7 +89,7 @@ namespace physics_helpers
     }
     /**
      * @brief Calculates the lab frame energy of the pion
-     * @param momentum_lab: Lab frame momentum
+     * @param momentum_lab Lab frame momentum
      * @returns The lab frame energy of the pion
      */
     inline double pion_lab_energy(const double momentum_lab)
@@ -98,7 +98,7 @@ namespace physics_helpers
     }
     /**
      * @brief Calculates the Mandelstam s variable
-     * @param energy_lab: Lab frame energy
+     * @param energy_lab Lab frame energy
      * @returns The Mandelstam s variable
      */
     inline double s(const double energy_lab)
@@ -107,8 +107,8 @@ namespace physics_helpers
     }
     /**
      * @brief Calculates the Mandelstam t variable
-     * @param k_cm: CM momentum
-     * @param theta_cm: Scattering angle in CM frame, in radians
+     * @param k_cm CM momentum
+     * @param theta_cm Scattering angle in CM frame, in radians
      * @returns The Mandelstam t variable
      */
     inline double t(const double k_cm, const double theta_cm)
@@ -117,7 +117,7 @@ namespace physics_helpers
     }
     /**
      * @brief Calculates the Lorentz factor
-     * @param beta: Velocity divided by the speed of light
+     * @param beta Velocity divided by the speed of light
      * @returns The Lorentz factor
      */
     inline double gamma(const double beta)
@@ -126,8 +126,8 @@ namespace physics_helpers
     }
     /**
      * @brief Calculates the velocity of the CM frame in the lab frame
-     * @param momentum_lab: Lab frame momentum
-     * @param energy_lab: Lab frame energy
+     * @param momentum_lab Lab frame momentum
+     * @param energy_lab Lab frame energy
      * @returns The velocity of the CM frame in the lab frame
      */
     inline double beta_boost(const double momentum_lab, const double energy_lab) // Speed of CM frame in lab
@@ -136,7 +136,7 @@ namespace physics_helpers
     }
     /**
      * @brief Calculates the energy of the pion in the CM frame
-     * @param k_cm: CM momentum
+     * @param k_cm CM momentum
      * @returns The energy of the pion in the CM frame
      */
     inline double E_cm_pi(const double k_cm)
@@ -145,7 +145,7 @@ namespace physics_helpers
     }
     /**
      * @brief Calculates the energy of the proton in the CM frame
-     * @param k_cm: CM momentum
+     * @param k_cm CM momentum
      * @returns The energy of the proton in the CM frame
      */
     inline double E_cm_p(const double k_cm)
@@ -154,7 +154,7 @@ namespace physics_helpers
     }
     /**
      * @brief Calculates the velocity of the pion in the CM frame
-     * @param momentum_cm: CM momentum
+     * @param momentum_cm CM momentum
      * @returns The velocity of the pion in the CM frame
      */
     inline double beta_pion_cm(const double momentum_cm)
@@ -163,7 +163,7 @@ namespace physics_helpers
     }
     /**
      * @brief Calculates the velocity of the proton in the CM frame
-     * @param momentum_cm: CM momentum
+     * @param momentum_cm CM momentum
      * @returns The velocity of the proton in the CM frame
      */
     inline double beta_proton_cm(const double momentum_cm)
@@ -172,8 +172,8 @@ namespace physics_helpers
     }
     /**
      * @brief Calculates the kinematic parameter alpha
-     * @param beta_cm: Velocity of the CM frame divided by the speed of light
-     * @param beta_pion: Velocity of the pion divided by the speed of light
+     * @param beta_cm Velocity of the CM frame divided by the speed of light
+     * @param beta_pion Velocity of the pion divided by the speed of light
      * @returns The kinematic parameter alpha
      */
     inline double alpha_kin(const double beta_cm, const double beta_pion)
@@ -182,9 +182,9 @@ namespace physics_helpers
     }
     /**
      * @brief Converts lab frame scattering angle to CM frame angle
-     * @param lab_theta: Scattering angle in lab frame, in degrees
-     * @param gamma_boost: Relativistic factor
-     * @param alpha_kinematic: Kinematic parameter
+     * @param lab_theta Scattering angle in lab frame, in degrees
+     * @param gamma_boost Relativistic factor
+     * @param alpha_kinematic Kinematic parameter
      * @returns Scattering angle in CM frame, in degrees
      */
     inline double theta_lab_to_cm(double lab_theta, const double gamma_boost, const double alpha_kinematic)
@@ -207,9 +207,9 @@ namespace physics_helpers
     }
     /**
      * @brief Converts CM frame scattering angle to lab frame angle
-     * @param cm_theta: Scattering angle in CM frame, in degrees
-     * @param gamma_boost: Relativistic factor
-     * @param alpha_kinematic: Kinematic parameter
+     * @param cm_theta Scattering angle in CM frame, in degrees
+     * @param gamma_boost Relativistic factor
+     * @param alpha_kinematic Kinematic parameter
      * @returns Scattering angle in lab frame, in degrees
      */
     inline double theta_cm_to_lab(const double cm_theta, const double gamma_boost, const double alpha_kinematic)
@@ -223,9 +223,9 @@ namespace physics_helpers
     }
     /**
      * @brief Calculates the Jacobian for the transformation from lab to CM frame
-     * @param lab_theta: Scattering angle in lab frame, in degrees
-     * @param gamma_boost: Relativistic factor
-     * @param alpha_kinematic: Kinematic parameter
+     * @param lab_theta Scattering angle in lab frame, in degrees
+     * @param gamma_boost Relativistic factor
+     * @param alpha_kinematic Kinematic parameter
      * @returns The Jacobian dOmega_cm/dOmega_lab
      */
     inline double jacobian(const double lab_theta, const double gamma_boost, const double alpha_kinematic) 
@@ -241,33 +241,80 @@ namespace physics_helpers
         return (std::sin(th_cm) / std::sin(lab)) * dcm_dlab;
     }
     /**
-     * @brief Calculates the associated Legendre polynomial
-     * @param l: Degree of the polynomial
-     * @param theta: Angle in radians
+     * @brief Calculates legendre polynomial P_l(x) based on recurrence
+     * @param l Degree of the polynomial
+     * @param x Value at which to evaluate the polynomial
+     * @returns The value of the legendre polynomial P_l(x)
+     */
+    inline double legendre(const int l, const double x)
+    {
+        if(l < 0) throw std::invalid_argument("Legendre polynomial degree must be non-negative");
+        if(l == 0) return 1.;
+        if(l == 1) return x;
+        double P_n_plus_1{0.}, P_n{x}, P_n_minus_1{1.};
+        for(int n=2;n<=l;n++)
+        {
+            P_n_plus_1 = (2.*n - 1.) * x * P_n - (n - 1.) * P_n_minus_1;
+            P_n_plus_1 /= static_cast<double>(n);
+            P_n_minus_1 = P_n;
+            P_n = P_n_plus_1;
+        }
+        return P_n;
+    }
+    /**
+     * @brief Calculates the associated Legendre polynomial 
+     * @param l Degree of the polynomial
+     * @param m Order of the polynomial
+     * @param x Argument for the polynomial
      * @returns The value of the associated Legendre polynomial
      */
-    inline double associated_legendre(const int l, const double theta)
+    inline double associated_legendre(const int l, const int m, const double x)
     {
-        const double cos_theta = std::cos(theta);
-        const double sin_theta = std::sin(theta);
-        double ret = 0.0;
-        switch(l)
+        if(l < 0) throw std::invalid_argument("Associated Legendre polynomial degree must be non-negative");
+        if(m < 0) throw std::invalid_argument("Associated Legendre polynomial order must be non-negative");
+        if(std::fabs(x) > 1.) throw std::invalid_argument("Associated Legendre polynomial argument must be in [-1, 1]");
+        if(m == 0) return physics_helpers::legendre(l, x);
+        double Pmm{1.}, double_factorial{1.}; // P_m^m
+        double root_term = std::sqrt(1. - x * x);
+        for(int i=1;i<=m;i++)
         {
-            case 0:
-                return 0.;
-            case 1:
-                ret = 1.;
-                break;
-            case 2:
-                ret = 3. * cos_theta;
-                break;
-            case 3:
-                ret = 0.5 * (15. * cos_theta * cos_theta - 3.);
-                break;
-            default:
-                throw std::invalid_argument("Invalid associated Legendre index " + std::to_string(l));
+            Pmm *= -double_factorial * root_term;
+            double_factorial += 2.0;
         }
-        return -1. * sin_theta * ret;
+        if(l == m) return Pmm;
+        double Pmmp1 = x * (2.0 * m + 1.) * Pmm; // P_{m+1}^m
+        if(l == m + 1) return Pmmp1;
+        double pll{0.0};
+        for(int ll=m+2;ll<=l;ll++)
+        {
+            pll = (x * (2.0 * ll - 1.0) * Pmmp1 - (ll + m - 1.0) * Pmm) / static_cast<double>(ll - m);
+            Pmm = Pmmp1;
+            Pmmp1 = pll;
+        }
+        return pll;
+    }
+    /**
+     * @brief Calculates the derivative of the Legendre polynomial P_l(x) with respect to x
+     * @param l Degree of the polynomial
+     * @param x Value at which to evaluate the derivative
+     * @returns The value of the derivative of the Legendre polynomial P_l(x)
+     */
+    inline double legendre_derivative(int l, double z) 
+    {
+        if (l <= 0) return 0.0;
+        if (l == 1) return 1.0;
+        double p_prev = 1.0;  
+        double p_curr = z;    
+        double dp_curr = 1.0;
+        
+        for (int k = 2; k <= l; k++) 
+        {
+            double p_next = ((2 * k - 1) * z * p_curr - (k - 1) * p_prev) / k;
+            dp_curr = z * dp_curr + k * p_curr; 
+            p_prev = p_curr;
+            p_curr = p_next;
+        }
+        return dp_curr;
     }
     /**
      * @brief Proton Dirac Form Factor
@@ -320,13 +367,13 @@ namespace physics_helpers
      * @brief Adaptive Simpson's rule for numerical integration
      * @param lower Lower limit of integration
      * @param upper Upper limit of integration
-     * @param f Function to integrate
+     * @tparam f Function to integrate
      * @param tol Tolerance for convergence
      * @param N_ITER Maximum number of iterations
      * @return Integrated value
      */
     template<typename Func>
-    inline double adaptive_simpson(const double lower, const double upper, Func&& f, double tol, int N_ITER = 100)
+    inline double adaptive_simpson(const double lower, const double upper, const Func& f, double tol, int N_ITER = 100)
     {
         const double mid = 0.5 * (lower + upper);
         const double f_low = f(lower), f_mid = f(mid), f_upper = f(upper);
@@ -346,10 +393,10 @@ namespace physics_helpers
     using col_array = std::array<double, N_COLS - 1>;
     /**
      * @brief Interpolates values in a table, written specificall for tables with row values in q/mu 
-     * @param x_extract: The value to interpolate at
-     * @param table: The table of values to interpolate from
-     * @tparam N_ROWS: Number of rows in the table
-     * @tparam N_COLS: Number of columns in the table
+     * @param x_extract The value to interpolate at
+     * @param table The table of values to interpolate from
+     * @tparam N_ROWS Number of rows in the table
+     * @tparam N_COLS Number of columns in the table
      * @note The first column of the table is assumed to be the x values, and the remaining columns are the y values to interpolate
      * @note The table is assumed to be sorted in ascending order by the first column
      * @note If x_extract is outside the range of the first column, the function will return the first or last row of the table, respectively
@@ -413,10 +460,10 @@ namespace physics_helpers
     /**
      * @brief Boosts a given four vector from CM to lab frame 
      * @param vec: The four vector to boost
-     * @param beta: Three vector representing the boost
+     * @param beta Three vector representing the boost
      * @returns The boosted four vector in the lab frame
      */
-    fourVector boost_cm_to_lab(const fourVector &vec, const threeVector &beta)
+    inline fourVector boost_cm_to_lab(const fourVector &vec, const threeVector &beta)
     {
         double beta2 = beta.mag2();
         if(beta2 == 0.) return vec;
@@ -432,32 +479,37 @@ namespace physics_helpers
     }
     /**
      * @brief Rotates a given four vector around a specified axis
-     * @param fVec: The four vector to rotate, passsed as reference
-     * @param axis: The axis to rotate around
+     * @param fVec The four vector to rotate, passsed as reference
+     * @param axis The axis to rotate around
      */
-    void rotate_four_vector(fourVector &fVec, const threeVector &axis)
+    inline void rotate_four_vector(fourVector &fVec, const threeVector &axis)
     {
         static const threeVector zAxis{0., 0., 1.};
-        threeVector target = (axis.mag2() == 1) ? axis : axis.normalize();
+        threeVector target = axis.normalize();
         double cos_theta = zAxis * target;
+
         if(std::fabs(cos_theta - 1.0) < 1e-6) return;
-        else if(std::fabs(cos_theta + 1.0) < 1.e-6)
+        if(std::fabs(cos_theta + 1.0) < 1e-6)
         {
-            fVec.px = -fVec.px;
             fVec.py = -fVec.py;
             fVec.pz = -fVec.pz;
             return;
         }
+
         threeVector rotation_axis = {-target.y, target.x, 0.};
         rotation_axis = rotation_axis.normalize();
+        
         double sin_theta = std::sqrt(1.0 - cos_theta * cos_theta);
         double ux = rotation_axis.x;
         double uy = rotation_axis.y;    
         double uz = rotation_axis.z;
+        
         double px = fVec.px;
         double py = fVec.py;
         double pz = fVec.pz;
+        
         double dot = rotation_axis * threeVector{px, py, pz};
+        
         fVec.px = px * cos_theta + (uy * pz - uz * py) * sin_theta + ux * dot * (1.0 - cos_theta);
         fVec.py = py * cos_theta + (uz * px - ux * pz) * sin_theta + uy * dot * (1.0 - cos_theta);
         fVec.pz = pz * cos_theta + (ux * py - uy * px) * sin_theta + uz * dot * (1.0 - cos_theta);

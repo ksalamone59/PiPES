@@ -82,18 +82,16 @@ class PartialWaveGen
         /**
          * @brief Construct generator.
          *
-         * @param momentum_lab_ Beam momentum in MeV
          * @param ch Pion charge
-         * @param theta_min_ Minimum lab scattering angle
-         * @param theta_max_ Maximum lab scattering angle
          * @param L_MAX_ Maximum partial wave
+         * @param verbose_ Whether to print debug information
+         * @param seed_ RNG seed
          */
         PartialWaveGen(const charge ch, const int L_MAX_=1, bool verbose_= false, std::mt19937::result_type seed_= 987654321) : verbose(verbose_), charge_polarity(ch), L_MAX(L_MAX_), seed(seed_)
         {
             if(charge_polarity != charge::plus && charge_polarity != charge::minus)
             {
-                throw std::invalid_argument(
-                    "Invalid pion charge");
+                throw std::invalid_argument("Invalid pion charge");
             }
             set_seed(seed_);
             uniform_dist = std::uniform_real_distribution<double>(0.0, 1.0);
@@ -129,11 +127,20 @@ class PartialWaveGen
         /**
          * @brief Set RNG seed.
          */
-        void set_seed(const std::mt19937::result_type seed_)noexcept
+        void set_seed(const std::mt19937::result_type seed_) noexcept
         {
             seed = seed_;
             mersenne_twister.seed(seed);
         }
+        /**
+         * @brief Randomizes RNG seed.
+         */
+            void randomize_seed() noexcept
+            {
+                static std::random_device rd;
+                seed = rd();
+                mersenne_twister.seed(seed);
+            }
         /**
          * @brief Set output in lab frame.
          */
@@ -265,6 +272,14 @@ class PartialWaveGen
         void set_beam_direction(const threeVector& direction)
         {
             beam_direction = direction.normalize();
+        }
+        /**
+         * @brief Returns the total cs for the current state 
+         * @returns The total cross section in fm^2
+         */
+        double get_total_cs() const noexcept
+        {
+            return state->get_total_cs();
         }
 };
 

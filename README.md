@@ -10,3 +10,5 @@ On set of 20 iterations sampling 1000000 events, the generator ran at a speed of
 ## Overview
 PiPES is a pure C++, no external packages required event generator. The phase shift values, and functional forms for the differential cross section, follow closely from the George Washington Groups SAID DB. 
 
+## Output 
+Outputs 2 angles: $\theta$ and $\phi$, in radians, in the frame of your choosing. $\theta$ gets rejection sampled based on $P(\cos(\theta))\sim\dfrac{d\sigma}{d\Omega}$.

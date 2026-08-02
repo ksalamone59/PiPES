@@ -11,7 +11,7 @@ class PhaseShiftLoader
     public:
         PhaseShiftLoader()
         {
-            phase_shift_data = io::load_table<51, 7>(table_file);
+            phase_shift_data = io::load_table<51, 15>(table_file);
         }
         ~PhaseShiftLoader() = default;
         /**
@@ -20,31 +20,65 @@ class PhaseShiftLoader
          * @param verbose: Whether to print the phase shifts to the console
          * @returns An array of phase shifts in degrees: {S11, S31, P11, P13, P31, P33}
          */
-        partial_wave set_s_p_phase_shifts(const double momentum_lab, bool verbose = false) const
+        partial_wave set_s_p_phase_shifts(const double momentum_lab, int lmax, bool verbose = false) const
         {
             partial_wave phase_shifts;
-            phase_shifts.lmax = 1;
+            phase_shifts.lmax = lmax;
             auto results = physics_helpers::interpolate(momentum_lab, phase_shift_data);
             phase_shifts[static_cast<std::size_t>(wave::S11)] = physics_helpers::deg2rad(results[0]);
             phase_shifts[static_cast<std::size_t>(wave::S31)] = physics_helpers::deg2rad(results[1]);
-            phase_shifts[static_cast<std::size_t>(wave::P11)] = physics_helpers::deg2rad(results[2]);
-            phase_shifts[static_cast<std::size_t>(wave::P13)] = physics_helpers::deg2rad(results[3]);
-            phase_shifts[static_cast<std::size_t>(wave::P31)] = physics_helpers::deg2rad(results[4]);
-            phase_shifts[static_cast<std::size_t>(wave::P33)] = physics_helpers::deg2rad(results[5]);
+            if(lmax >= 1)
+            {
+                phase_shifts[static_cast<std::size_t>(wave::P11)] = physics_helpers::deg2rad(results[2]);
+                phase_shifts[static_cast<std::size_t>(wave::P13)] = physics_helpers::deg2rad(results[3]);
+                phase_shifts[static_cast<std::size_t>(wave::P31)] = physics_helpers::deg2rad(results[4]);
+                phase_shifts[static_cast<std::size_t>(wave::P33)] = physics_helpers::deg2rad(results[5]);
+                if(lmax >= 2)
+                {
+                    phase_shifts[static_cast<std::size_t>(wave::D13)] = physics_helpers::deg2rad(results[6]);
+                    phase_shifts[static_cast<std::size_t>(wave::D15)] = physics_helpers::deg2rad(results[7]);
+                    phase_shifts[static_cast<std::size_t>(wave::D33)] = physics_helpers::deg2rad(results[8]);
+                    phase_shifts[static_cast<std::size_t>(wave::D35)] = physics_helpers::deg2rad(results[9]);
+                    if(lmax >= 3)
+                    {
+                        phase_shifts[static_cast<std::size_t>(wave::F15)] = physics_helpers::deg2rad(results[10]);
+                        phase_shifts[static_cast<std::size_t>(wave::F17)] = physics_helpers::deg2rad(results[11]);
+                        phase_shifts[static_cast<std::size_t>(wave::F35)] = physics_helpers::deg2rad(results[12]);
+                        phase_shifts[static_cast<std::size_t>(wave::F37)] = physics_helpers::deg2rad(results[13]);
+                    }
+                }
+            }
             if(verbose)
             {
                 std::cout << "Phase shifts for momentum " << momentum_lab << " MeV:" << std::endl;
                 std::cout << "S11: " << physics_helpers::rad2deg(phase_shifts[static_cast<std::size_t>(wave::S11)]) << " deg" << std::endl;
                 std::cout << "S31: " << physics_helpers::rad2deg(phase_shifts[static_cast<std::size_t>(wave::S31)]) << " deg" << std::endl;
-                std::cout << "P11: " << physics_helpers::rad2deg(phase_shifts[static_cast<std::size_t>(wave::P11)]) << " deg" << std::endl;
-                std::cout << "P13: " << physics_helpers::rad2deg(phase_shifts[static_cast<std::size_t>(wave::P13)]) << " deg" << std::endl;
-                std::cout << "P31: " << physics_helpers::rad2deg(phase_shifts[static_cast<std::size_t>(wave::P31)]) << " deg" << std::endl;
-                std::cout << "P33: " << physics_helpers::rad2deg(phase_shifts[static_cast<std::size_t>(wave::P33)]) << " deg" << std::endl;
+                if(lmax >= 1)
+                {
+                    std::cout << "P11: " << physics_helpers::rad2deg(phase_shifts[static_cast<std::size_t>(wave::P11)]) << " deg" << std::endl;
+                    std::cout << "P13: " << physics_helpers::rad2deg(phase_shifts[static_cast<std::size_t>(wave::P13)]) << " deg" << std::endl;
+                    std::cout << "P31: " << physics_helpers::rad2deg(phase_shifts[static_cast<std::size_t>(wave::P31)]) << " deg" << std::endl;
+                    std::cout << "P33: " << physics_helpers::rad2deg(phase_shifts[static_cast<std::size_t>(wave::P33)]) << " deg" << std::endl;
+                    if(lmax >= 2)
+                    {
+                        std::cout << "D13: " << physics_helpers::rad2deg(phase_shifts[static_cast<std::size_t>(wave::D13)]) << " deg" << std::endl;
+                        std::cout << "D15: " << physics_helpers::rad2deg(phase_shifts[static_cast<std::size_t>(wave::D15)]) << " deg" << std::endl;
+                        std::cout << "D33: " << physics_helpers::rad2deg(phase_shifts[static_cast<std::size_t>(wave::D33)]) << " deg" << std::endl;
+                        std::cout << "D35: " << physics_helpers::rad2deg(phase_shifts[static_cast<std::size_t>(wave::D35)]) << " deg" << std::endl;
+                        if(lmax >= 3)
+                        {
+                            std::cout << "F15: " << physics_helpers::rad2deg(phase_shifts[static_cast<std::size_t>(wave::F15)]) << " deg" << std::endl;
+                            std::cout << "F17: " << physics_helpers::rad2deg(phase_shifts[static_cast<std::size_t>(wave::F17)]) << " deg" << std::endl;
+                            std::cout << "F35: " << physics_helpers::rad2deg(phase_shifts[static_cast<std::size_t>(wave::F35)]) << " deg" << std::endl;
+                            std::cout << "F37: " << physics_helpers::rad2deg(phase_shifts[static_cast<std::size_t>(wave::F37)]) << " deg" << std::endl;
+                        }
+                    }
+                }
             }
             return phase_shifts;
         }
     private:
-        std::array<std::array<double, 7>, 51> phase_shift_data;
+        std::array<std::array<double, 15>, 51> phase_shift_data;
         const std::filesystem::path table_file = std::filesystem::path(PHASE_SHIFT_DATADIR) / "phase_shifts.dat";
 };
 

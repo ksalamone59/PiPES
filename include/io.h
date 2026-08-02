@@ -2,7 +2,6 @@
 #define IO_H
 
 #include <filesystem>
-#include <format>
 #include <stdexcept>
 #include <string_view>
 

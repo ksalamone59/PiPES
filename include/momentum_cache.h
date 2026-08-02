@@ -16,7 +16,7 @@ class MomentumCacheState
             phase_shift_loader = std::make_shared<PhaseShiftLoader>();
         }
         ~MomentumCacheState() = default;
-        std::shared_ptr<const generatorState> get_state(const double lab_momentum)
+        inline std::shared_ptr<const generatorState> get_state(const double lab_momentum, const int L_MAX)
         {
             const int momentum_idx = static_cast<int>(std::round(lab_momentum / bin_width));
             std::lock_guard<std::mutex> lock(mutex);
@@ -26,17 +26,18 @@ class MomentumCacheState
                 return it->second;
             }
             // Update the momentum based on the cache state
-            auto new_state = std::make_shared<const generatorState>(phase_shift_loader, momentum_idx, pion_charge, theta_min_lab, theta_max_lab);
+            const double quantized_momentum = momentum_idx * bin_width;
+            auto new_state = std::make_shared<const generatorState>(phase_shift_loader, L_MAX, quantized_momentum, pion_charge, theta_min_lab, theta_max_lab);
             new_state->get_dsigma_domega_costheta();
             cross_section_cache[momentum_idx] = new_state;
             return new_state;   
         }
-        void clear()
+        inline void clear()
         {
             std::lock_guard<std::mutex> lock(mutex);
             cross_section_cache.clear();
         }
-        std::size_t size() const
+        inline std::size_t size() const
         {
             std::lock_guard<std::mutex> lock(mutex);
             return cross_section_cache.size();
