@@ -88,6 +88,20 @@ namespace physics_helpers
         return std::sqrt((s - std::pow(m_proton + m_pion, 2)) * (s - std::pow(m_proton - m_pion, 2)) ) / (2.0 * std::sqrt(s));
     }
     /**
+     * @brief Converts projectile CM frame momentum to lab frame momentum
+     * assuming a stationary target.
+     * @param p_cm Momentum in the CM frame
+     * @param m_proj Mass of projectile particle (e.g., pion)
+     * @param m_target Mass of stationary target particle (e.g., proton)
+     * @returns Momentum of the projectile in the lab frame
+     */
+    inline double p_cm_to_lab(const double p_cm, const double m_proj, const double m_target)
+    {
+        const double E1_cm = std::hypot(p_cm, m_proj);
+        const double E2_cm = std::hypot(p_cm, m_target);
+        return p_cm * (E1_cm + E2_cm) / m_target;
+    }
+    /**
      * @brief Calculates the lab frame energy of the pion
      * @param momentum_lab Lab frame momentum
      * @returns The lab frame energy of the pion
