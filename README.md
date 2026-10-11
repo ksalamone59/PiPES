@@ -4,7 +4,7 @@
 A header-only C++20 event generator for low-energy $\pi^{\pm} p$ elastic scattering. You give it a pion charge, a beam momentum and an angular range, and it gives back sampled scattering angles and the outgoing pion and proton four-vectors.
 
 - Partial waves up to and including the $f$-wave ($\ell \leq 3$)
-- Variable beam momentum within $\left[100, 340\right]$ MeV/$c$ (phase shifts are interpolated)
+- Variable beam momentum within $\left[100, 340\right]\ \text{MeV}/c$ (phase shifts are interpolated)
 - Coulomb contributions are included
 - Scattering can be rotated about an incident beam direction that does not point along $z$
 - Results can be output in the CM or lab frame
