@@ -71,6 +71,7 @@ namespace physics_helpers
     constexpr double m_proton = 938.27; // MeV/c^2
     constexpr double m_proton_squared = m_proton * m_proton;
     constexpr double magnetic_moment_proton =  2.792847344; // Nuclear magnetons
+    constexpr double magnetic_moment_neutron = -1.91304273; // Nuclear magnetons
     constexpr double reduced_mass = (m_pion * m_proton) / (m_pion + m_proton); // MeV/c^2
     constexpr double hbarc = 197.327; // MeV*fm
     constexpr double alpha_em = 1.0 / 137.036;
@@ -331,11 +332,20 @@ namespace physics_helpers
         return dp_curr;
     }
     /**
-     * @brief Proton Dirac Form Factor
+     * @brief Dipole form factor, from Tromborg (1974)
+     * @param t Mandelstam t 
+     * @returns The value of the dipole form factor
+     */
+    inline double dipole(const double t)
+    {
+        return std::pow(1-0.028 * t / m_pion_squared, -2.0);
+    }
+    /**
+     * @brief Proton Dirac Form Factor in VMD form
      * @param t_ Mandelstam t (internally converted to t/m_pi^2)
      * @returns The value of the Proton Dirac Form Factor
      */
-    inline double F1P(double t_)
+    inline double F1P_VMD(double t_)
     {
         t_ /= m_pion_squared;
         return (0.47737 + 0.04497/std::pow(1.-t_/18.2, 2.))/(1.-t_/27.523)
@@ -343,11 +353,11 @@ namespace physics_helpers
             - 0.352/(1.-t_/70.) - 0.068/(1.-t_/140.);
     }
     /**
-     * @brief Proton Pauli form factor 
+     * @brief Proton Pauli form factor in VMD form
      * @param t_ Mandelstam t (in units of m_pi^2 = 1)
      * @returns The value of the Proton Pauli form factor
      */
-    inline double F2P(double t_)
+    inline double F2P_VMD(double t_)
     {
         t_ /= m_pion_squared;
         return (2.6676 + 0.48086/(1.-t_/13.758))/(1.-t_/30.943) - 2.2/(1.-t_/91.)
@@ -355,14 +365,47 @@ namespace physics_helpers
             - 0.008/(1.-t_/70.) + 0.02/(1.-t_/140.);
     }
     /**
-     * @brief Pion Form Factor 
+     * @brief Pion Form Factor in VMD form
      * @param t_ Mandelstam t (in units of m_pi^2 = 1)
      * @returns The value of the Pion Form Factor
      */
-    inline double F_Pi(double t_)
+    inline double F_Pi_VMD(double t_)
     {
         t_ /= m_pion_squared;
         return 1.0538/(1-(t_/31.093)) - 0.0538/(1-(t_/76.8)); 
+    }
+    /**
+     * @brief Proton Dirac Form Factor in dipole form following Tromborg
+     * @brief F1^p = D (4M^2 - mu_p t)/(4M^2 - t)
+     * @param t_ Mandelstam t
+     * @returns The value of the Proton Dirac Form Factor
+     */
+    inline double F1P(const double t_)
+    {
+        const double four_mass_squared = 4.0 * m_proton_squared;
+        return (four_mass_squared - magnetic_moment_proton * t_) / (four_mass_squared - t_) * dipole(t_);
+    }
+    /**
+     * @brief Proton Pauli Form Factor in dipole form following Tromborg
+     * @brief dimensionless: 2M * F2^Tromborg = 4M^2 (mu_p - 1) D/(4M^2 - t)
+     * @param t_ Mandelstam t
+     * @returns The value of the Proton Pauli Form Factor
+     */
+    inline double F2P(const double t_)   
+    {
+        const double four_mass_squared = 4.0 * m_proton_squared;
+        return four_mass_squared * (magnetic_moment_proton - 1.0) / (four_mass_squared - t_) * dipole(t_);
+    }
+    /**
+     * @brief Pion Form Factor in dipole form following Tromborg
+     * @brief  F_pi = F1^p - F1^n = D (4M^2 - (mu_p - mu_n) t)/(4M^2 - t)
+     * @param t_ Mandelstam t
+     * @returns The value of the Pion Form Factor
+     */
+    inline double F_Pi(const double t_) 
+    {
+        const double four_mass_squared = 4.0 * m_proton_squared;
+        return (four_mass_squared - (magnetic_moment_proton - magnetic_moment_neutron) * t_) / (four_mass_squared - t_) * dipole(t_);
     }
     /**
      * @brief Simpson's rule for numerical integration

@@ -1,3 +1,5 @@
 .vscode 
 tmp/
 test/
+diff.sh
+Papers/

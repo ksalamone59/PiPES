@@ -6,12 +6,15 @@
 #include <filesystem>
 #include "partial_wave.h"
 
+constexpr std::size_t N_MOMENTUM_COLUMNS = 81;
+constexpr std::size_t N_PHASE_SHIFT_COLUMNS = 15;
+
 class PhaseShiftLoader
 {
     public:
         PhaseShiftLoader()
         {
-            phase_shift_data = io::load_table<51, 15>(table_file);
+            phase_shift_data = io::load_table<N_MOMENTUM_COLUMNS, N_PHASE_SHIFT_COLUMNS>(table_file);
         }
         ~PhaseShiftLoader() = default;
         /**
@@ -78,7 +81,7 @@ class PhaseShiftLoader
             return phase_shifts;
         }
     private:
-        std::array<std::array<double, 15>, 51> phase_shift_data;
+        std::array<std::array<double, N_PHASE_SHIFT_COLUMNS>, N_MOMENTUM_COLUMNS> phase_shift_data;
         const std::filesystem::path table_file = std::filesystem::path(PHASE_SHIFT_DATADIR) / "phase_shifts.dat";
 };
 

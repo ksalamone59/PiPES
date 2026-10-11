@@ -177,6 +177,10 @@ class generatorState
         {
             return pi_p_amplitude;
         }
+        inline PiPAmplitude &get_amplitude_modifiable() noexcept
+        {
+            return pi_p_amplitude;
+        }
         inline double get_bin_size() const noexcept
         {
             return bin_size;

@@ -124,11 +124,12 @@
                 const double theta_cm_rad = physics_helpers::deg2rad(theta_cm);
                 const double t = physics_helpers::t(cm_momentum, theta_cm_rad);
                 const double M = physics_helpers::m_proton;
-                cdouble ret = ((2 * cm_momentum * gamma_coulomb / t) + physics_helpers::alpha_em / (2. * W) * 
+                const double ALPHA = physics_helpers::alpha_em;
+                cdouble ret = ((2 * cm_momentum * gamma_coulomb / t) + ALPHA / (2. * W) * 
                     ((M + W)/(energy_cm_proton + M))) * 
                     physics_helpers::F1P(t);
                 ret += (W - M + t / (4 * (energy_cm_proton + M))) * 
-                        physics_helpers::alpha_em * physics_helpers::F2P(t)/(2.*W*physics_helpers::m_proton);
+                        ALPHA * physics_helpers::F2P(t)/(2.*W*physics_helpers::m_proton);
                 ret *= physics_helpers::F_Pi(t) * std::exp(I * phiC(theta_cm));
                 return ret * physics_helpers::hbarc; // MeV to fm
             }
@@ -143,9 +144,10 @@
                 const double theta_cm_rad = physics_helpers::deg2rad(theta_cm);
                 const double t = physics_helpers::t(cm_momentum, theta_cm_rad);
                 const double M = physics_helpers::m_proton;
+                const double ALPHA = physics_helpers::alpha_em;
                 cdouble ret = ((W + M) / (energy_cm_proton + M)) * physics_helpers::F1P(t) + 
                     (W + t/(4.*(energy_cm_proton + M))) * physics_helpers::F2P(t)/physics_helpers::m_proton;
-                ret *= physics_helpers::alpha_em * physics_helpers::F_Pi(t) / (2*W*std::tan(0.5*theta_cm_rad));
+                ret *= ALPHA * physics_helpers::F_Pi(t) / (2*W*std::tan(0.5*theta_cm_rad));
                 return ret * physics_helpers::hbarc; // MeV to fm
             }
             /**
@@ -192,7 +194,8 @@
             inline cdouble f13(const int l, const double delta_13, const double eta_13, const double delta_1, const double delta_3)
             {
                 if(charge_polarity == charge::plus || l > 1) return cdouble(0.0, 0.0);
-                return (2./3.) * std::numbers::sqrt2 * (eta_13 + I * delta_13) * std::exp(I * (delta_1 + delta_3));
+                // Tromborg Eq. 10c: f13 = (2/3) sqrt(2) (eta13 + i Delta13) exp(i(delta1 + delta3)); divided by 2iq as in Eq. 8
+                return (2.0 / 3.0) * std::numbers::sqrt2 * (eta_13 + I * delta_13) * std::exp(I * (delta_1 + delta_3)) / (2.0 * I * cm_momentum_fm);
             }
             /**
              * @brief Calculates the Coulomb phase shift integral \Sigma_{l\pm} (Eq. 12)
@@ -227,7 +230,7 @@
                     {
                         term1 = (2.0 * cm_momentum * gamma_coulomb / t_z) * F1P(t_z) * (legendre(l, z) - 1.0);
                     }
-                    double term2 = (alpha_em / (2.0 * W)) * F2P(t_z) * legendre(l, z);
+                    double term2 = (physics_helpers::alpha_em / (2.0 * W)) * F2P(t_z) * legendre(l, z);
                     double ret = F_Pi(t_z) * (term1 - term2);
                     return ret;
                 };
@@ -241,7 +244,7 @@
                     return F_Pi(t_z) * (f1_term + f2_term) * P_prime_sum;
                 };
                 double first_integral = 0.5 * cm_momentum * adaptive_simpson(-1.0, 1.0, first_integrand, 1e-13, 100);
-                double second_integral = sgn * ((alpha_em * cm_momentum) / (4.0 * W * (J + 0.5))) 
+                double second_integral = sgn * ((physics_helpers::alpha_em * cm_momentum) / (4.0 * W * (J + 0.5))) 
                                         * adaptive_simpson(-1.0, 1.0, second_integrand, 1e-13, 100);
                 cached_value = first_integral + second_integral;
                 if(charge_polarity == charge::minus) *cached_value *= -1.0;
@@ -325,60 +328,72 @@
                 const double costh = std::cos(theta_rad);
                 const double sinth = std::sin(theta_rad);
                 cdouble a0_plus(0.0, 0.0);
-                static const double one_third = 1.0/3.0, two_thirds = 2.0/3.0;
-                if(charge_polarity == charge::plus)
+                static const double one_third = 1.0 / 3.0, two_thirds = 2.0 / 3.0;
+
+                if (charge_polarity == charge::plus)
                 {
                     a0_plus = T(phase_shifts[static_cast<std::size_t>(wave::S31)]);
                 }
-                else if(charge_polarity == charge::minus)
+                else if (charge_polarity == charge::minus)
                 {
                     cdouble T_32 = T(phase_shifts[static_cast<std::size_t>(wave::S31)], eta_S31);
                     cdouble T_12 = T(phase_shifts[static_cast<std::size_t>(wave::S11)], eta_S11);
                     cdouble f_13_S = f13(0, Delta13_S, eta13_S, phase_shifts[static_cast<std::size_t>(wave::S11)], phase_shifts[static_cast<std::size_t>(wave::S31)]);
-                    a0_plus = one_third * T_32 + two_thirds * T_12 - two_thirds * std::numbers::sqrt2 * f_13_S / (2. * I * cm_momentum_fm);
+                    
+                    a0_plus = one_third * T_32 + two_thirds * T_12 - two_thirds * std::numbers::sqrt2 * f_13_S;
                 }
                 a0_plus *= std::exp(2.0 * I * coulomb_phase_integral(0, true));
                 spin_no_flip_amplitude = a0_plus;
-                for(int l=1;l<=L_MAX;l++)
+
+                for (int l = 1; l <= L_MAX; l++)
                 {
-                    cdouble a_plus(0.0,0.0), a_minus(0.0,0.0);
+                    cdouble a_plus(0.0, 0.0), a_minus(0.0, 0.0);
                     std::size_t base = 2 + 4 * (l - 1);
                     std::size_t idx_12_minus = base;
-                    std::size_t idx_12_plus = base + 1;
+                    std::size_t idx_12_plus  = base + 1;
                     std::size_t idx_32_minus = base + 2;
-                    std::size_t idx_32_plus = base + 3;
-                    if(charge_polarity == charge::plus)
+                    std::size_t idx_32_plus  = base + 3;
+
+                    if (charge_polarity == charge::plus)
                     {
-                        a_plus = T(phase_shifts[idx_32_plus]);
+                        a_plus  = T(phase_shifts[idx_32_plus]);
                         a_minus = T(phase_shifts[idx_32_minus]);
                     }
-                    else if(charge_polarity == charge::minus)
+                    else if (charge_polarity == charge::minus)
                     {
+                        // Only apply P-wave inelasticity when l == 1
+                        const double eta_32_p = (l == 1) ? eta_P33 : 1.0;
+                        const double eta_12_p = (l == 1) ? eta_P13 : 1.0;
+
                         cdouble T_32_minus = T(phase_shifts[idx_32_minus]);
-                        cdouble T_32_plus = T(phase_shifts[idx_32_plus], eta_P33);
+                        cdouble T_32_plus  = T(phase_shifts[idx_32_plus], eta_32_p);
                         cdouble T_12_minus = T(phase_shifts[idx_12_minus]);
-                        cdouble T_12_plus = T(phase_shifts[idx_12_plus], eta_P13);
-                        a_minus = one_third * T_32_minus + two_thirds * T_12_minus; // No mixing here
+                        cdouble T_12_plus  = T(phase_shifts[idx_12_plus], eta_12_p);
+                        a_minus = one_third * T_32_minus + two_thirds * T_12_minus;
                         cdouble mixing_term = f13(l, Delta13_P32, eta13_P32, phase_shifts[idx_12_plus], phase_shifts[idx_32_plus]);
-                        a_plus = one_third * T_32_plus + two_thirds * T_12_plus - two_thirds * std::numbers::sqrt2 * mixing_term / (2. * I * cm_momentum_fm);
+                        a_plus = one_third * T_32_plus + two_thirds * T_12_plus - two_thirds * std::numbers::sqrt2 * mixing_term;
                     }
-                    cdouble phase_c_plus = std::exp(2.0 * I * coulomb_phase_integral(l, true));
+
+                    cdouble phase_c_plus  = std::exp(2.0 * I * coulomb_phase_integral(l, true));
                     cdouble phase_c_minus = std::exp(2.0 * I * coulomb_phase_integral(l, false));
-                    a_plus *= phase_c_plus;
+
+                    a_plus  *= phase_c_plus;
                     a_minus *= phase_c_minus;
-                    spin_no_flip_amplitude += ((l + 1.0) * a_plus + static_cast<double>(l) * a_minus) * std::legendre(l, costh);
+
+                    spin_no_flip_amplitude += ((l + 1.0) * a_plus + static_cast<double>(l) * a_minus) * physics_helpers::legendre(l, costh);
                     spin_flip_amplitude += (a_plus - a_minus) * physics_helpers::legendre_derivative(l, costh) * sinth;
                 }
+
                 cdouble spin_no_flip_coulomb_amplitude = coulomb_no_spin_flip_amplitude(theta_cm);
-                cdouble spin_flip_coulomb_amplitude = coulomb_spin_flip_amplitude(theta_cm);
-                // Couomb amplitudes are defined for pi+p, Tromborg: this gives pi-p
-                if(charge_polarity == charge::minus)
+                cdouble spin_flip_coulomb_amplitude    = coulomb_spin_flip_amplitude(theta_cm);
+
+                if (charge_polarity == charge::minus)
                 {
                     spin_no_flip_coulomb_amplitude = -std::conj(spin_no_flip_coulomb_amplitude);
-                    spin_flip_coulomb_amplitude = -spin_flip_coulomb_amplitude;
+                    spin_flip_coulomb_amplitude    = -spin_flip_coulomb_amplitude;
                 }
-                double dcs = std::norm(spin_no_flip_amplitude + spin_no_flip_coulomb_amplitude) + std::norm(spin_flip_amplitude + spin_flip_coulomb_amplitude);
-                return dcs;
+
+                return std::norm(spin_no_flip_amplitude + spin_no_flip_coulomb_amplitude) + std::norm(spin_flip_amplitude + spin_flip_coulomb_amplitude);
             }
             /**
              * @brief: Update PWA parameters for a given lab momentum 
@@ -459,11 +474,13 @@
                 // Fill the cache 
                 coulomb_phase_cache.assign(L_MAX + 1, {});
                 auto sigmas = physics_helpers::interpolate(cm_momentum/physics_helpers::m_pion, coulomb_phase_shifts);
-                coulomb_phase_cache[0][1] = sigmas[0];
-                coulomb_phase_cache[1][0] = sigmas[1];
-                coulomb_phase_cache[1][1] = sigmas[2];
+                const double charge_sign = static_cast<int>(charge_polarity);
+                coulomb_phase_cache[0][1] = charge_sign * sigmas[0];
+                coulomb_phase_cache[1][0] = charge_sign * sigmas[1];
+                coulomb_phase_cache[1][1] = charge_sign * sigmas[2];
             }
             inline const partial_wave &get_phase_shifts() const {return phase_shifts;}
+            inline void set_partial_waves(const partial_wave &pw) {phase_shifts = pw;}
     };
 
     #endif 

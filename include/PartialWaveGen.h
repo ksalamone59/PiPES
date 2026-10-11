@@ -75,7 +75,7 @@ class PartialWaveGen
          *
          * This will later be replaced/looked up from a momentum cache.
          */
-        std::shared_ptr<const generatorState> state;
+        std::shared_ptr<generatorState> state;
     public:
         PartialWaveGen() = default;
         ~PartialWaveGen() = default;
@@ -102,7 +102,7 @@ class PartialWaveGen
          * This is the function that will be used
          * by the momentum cache later.
          */
-        void set_state(const std::shared_ptr<const generatorState>& new_state)
+            void set_state(const std::shared_ptr<generatorState>& new_state)
         {
             state = new_state;
             costheta_dist = std::uniform_real_distribution<double>(state->get_umin(), state->get_umax());
@@ -113,6 +113,13 @@ class PartialWaveGen
          * @brief Get current generator state.
          */
         const generatorState &get_state() const noexcept
+        {
+            return *state;
+        }
+        /**
+         * @brief Get modifiable generator state.
+         */
+        generatorState &get_state_modifiable() noexcept
         {
             return *state;
         }
